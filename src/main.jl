@@ -22,6 +22,6 @@ scatter
 
 f(type::String) = equality.(compare(type)...)
 f.(type)
-mean.(f.(type))
+mean(mean.(f.(type)))
 std.(f.(type))
 σ.(f.(type))
