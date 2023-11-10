@@ -13,61 +13,81 @@ Base.keys(s::ProteinStructure) = keys(s.models)
 Base.keys(m::Model) = keys(m.chains)
 Base.keys(c::Chain) = keys(c.residues)
 Base.keys(r::Residue) = keys(r.atoms)
-Base.convert(::Type{Chain},m::Model) = only(m)
-Base.convert(::Type{Model},m::ProteinStructure) = only(m)
 
+Base.convert(::Type{Chain}, m::Model) = only(m)
+Base.convert(::Type{Model}, m::ProteinStructure) = only(m)
+Base.convert(::Type{AminoAcid}, r::Residue) = parse(AminoAcid, r.name)
 
 prop(x::AbstractVector{Bool}) = count(x) / length(x)
 
-equality(x::Chain, y::Chain) = prop(equality.(x,y))
+
+equality(matrix::AbstractMatrix{Residue}) = equality(matrix[:, 1], matrix[:, 2])
+equality(x::Union{Chain,AbstractVector{Residue}}, y::Union{Chain,AbstractVector{Residue}}) = prop(equality.(x, y))
 equality(x::Residue, y::Residue) = resname(x) == resname(y)
 
-function compare(type::String)::Tuple{Ref{ProteinStructure},Vector{ProteinStructure}}
-    simulated = read.(path * "/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir(path)), [PDB])
-    real = read("$truePath/$type.pdb", PDB)
-    (Ref(real), simulated)
-end
-
-
-x = collect(only(compare(type[1])[1][]))[1]
-Base.convert(::Type{AminoAcid}, r::Residue) = parse(AminoAcid, r.name)
-σ(x) = std(x) / mean(x)
+similarity(matrix::AbstractMatrix{Residue}) = similarity(matrix[1, :], matrix[2, :])
 similarity(x::Residue, y::Residue) = BLOSUM62[x, y]
-similarity(x::Chain, y::Chain) = mean(similarity.(x, y))
-similarity(x::ProteinStructure, y::ProteinStructure) = similarity(x["A"], y["A"])
-mean(similarity.(compare(type[1])...))
-i(type::String) = equality.(compare(type)...)
-s(type::String) = similarity.(compare(type)...)
-i.(type)
-mean(mean.(i.(type)))
-mean(mean.(s.(type)))
-std.(i.(type))
-σ.(i.(type))
+similarity(x::Union{Chain,AbstractVector{Residue}}, y::Union{Chain,AbstractVector{Residue}}) = mean(similarity.(x, y))
+
+
+
+simulated(type::String)::Vector{ProteinStructure} = (read.(path * "/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir(path)), [PDB]))[1:40]
+reference(type::String)::ProteinStructure = read("$truePath/$type.pdb", PDB)
+
+
+
+σ(x) = std(x) / mean(x)
+
+
 
 (v::AbstractVector{Function})(x...) = map(f -> f(x...), v)
-accessibility(x::Atom) =x.temp_factor
+accessibility(x::Atom) = x.temp_factor
 accessibility(x::Residue) = mean(accessibility.(x))
 
-unpack(x) = if length(x)==1
-    only(x)
-else
-    x
+unpack(x) =
+    if length(x) == 1
+        only(x)
+    else
+        x
+    end
+
+multibroadcast(n::Integer, f, v...) =
+    if n == 0
+        f(v...)
+    else
+        unpack(multibroadcast.(n - 1, f, v...))
+    end
+
+
+metric(m) = mean.(multibroadcast(4, m, Ref.(reference.(type)), simulated.(type)))
+
+function Base.filter(f, m::AbstractArray, dims::Integer)
+    if dims > length(size(m))
+        throw(ArgumentError("dims = $dims > $(length(size(m)))"))
+    end
+    stack(filter(f, eachslice(m; dims=dims)); dims=dims)
 end
 
-multibroadcast(n::Integer, f,v...)= if n == 0
-    f(v...)
-else
-    unpack(multibroadcast.(n-1,f,v...))
+filter_accessibility(predicate::Function) = (ref::Chain, val::Chain) -> filter(hcat(collect(ref), collect(val)), 1) do r
+    ref = r[1]
+    println(typeof(ref))
+    predicate(accessibility(ref))
 end
 
+core(metric) = metric ∘ filter_accessibility(x -> x < 15)
+surface(metric) = metric ∘ filter_accessibility(x -> x > 0.3)
 
-metric(f,ref::ProteinStructure,induit::ProteinStructure) =  multibroadcast(3, f,ref, induit)
-metric.(Ref([equality, (x,_) -> accessibility(x)]),compare(first(type))... )[1]
-metric.(Ref([equality]),compare(first(type))... )[1]
+metric(core(equality))
 
-multibroadcast(2,x -> x+1,[[1],[2]])
-ch = only(only(compare("1ABO")[1][]))
+metric(similarity)
 
-xs = rand(1:3, 1000)
-ys = randn(1000)
-violin(xs,ys)
+x = only.(only.(reference.(type)))
+count.(x -> x  < 15 ,multibroadcast(2,accessibility,x))
+
+density(accessibility.(x[7]))
+
+density(accessibility.(x))
+y = only(only(first(simulated(first(type)))))
+
+
+multibroadcast(4, equality ∘ filter_accessibility(x -> x < .15),Ref.(reference.(type)), simulated.(type)) .|> mean
