@@ -1,12 +1,16 @@
+using Revise
 using BioStructures
 using Base.Filesystem
 using Statistics
 using CairoMakie
 using BioAlignments
 using BioSymbols
+using CSV
+using DataFrames
 
 path = "/home/hacquard/fullseqdesign_rosetta/allpositions/rosetta/"
 truePath = "/home/hacquard/fullseqdesign_rosetta/pdb.full/"
+protein = "/home/hacquard/rosetta_compare/data/protein.dat"
 type = ["1ABO", "1BM2", "1CKA", "1G9O", "1M61", "1O4C", "1R6J", "2BYG"]
 
 Base.keys(s::ProteinStructure) = keys(s.models)
@@ -17,7 +21,7 @@ Base.keys(r::Residue) = keys(r.atoms)
 Base.convert(::Type{Chain}, m::Model) = only(m)
 Base.convert(::Type{Model}, m::ProteinStructure) = only(m)
 Base.convert(::Type{AminoAcid}, r::Residue) = parse(AminoAcid, r.name)
-
+Base.convert(::Type{Chain},m::ProteinStructure) = convert(Chain,convert(Model,m))
 prop(x::AbstractVector{Bool}) = count(x) / length(x)
 
 
@@ -34,15 +38,9 @@ similarity(x::Union{Chain,AbstractVector{Residue}}, y::Union{Chain,AbstractVecto
 simulated(type::String)::Vector{ProteinStructure} = (read.(path * "/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir(path)), [PDB]))[1:40]
 reference(type::String)::ProteinStructure = read("$truePath/$type.pdb", PDB)
 
-
-
-σ(x) = std(x) / mean(x)
-
-
-
-(v::AbstractVector{Function})(x...) = map(f -> f(x...), v)
-accessibility(x::Atom) = x.temp_factor
-accessibility(x::Residue) = mean(accessibility.(x))
+partial(f,x...)= (y...) -> f(x...,y...)
+pack(f::Function, x::Tuple) = f(x...)
+pack(f) = partial(pack,f)
 
 unpack(x) =
     if length(x) == 1
@@ -58,8 +56,16 @@ multibroadcast(n::Integer, f, v...) =
         unpack(multibroadcast.(n - 1, f, v...))
     end
 
+σ(x) = std(x) / mean(x)
 
-metric(m) = mean.(multibroadcast(4, m, Ref.(reference.(type)), simulated.(type)))
+p = CSV.read(protein,DataFrame; delim=" ", ignorerepeated=true)
+apply(f,d::DataFrame) = DataFrame(multibroadcast(2,f , eachcol(d)), names(d))
+p = hcat(p[!,1:7],apply(l -> parse.(Int,split(l,",")),p[!,8:12]))
+p.hydrophcorelist
+p.surflist
+(v::AbstractVector{Function})(x...) = map(f -> f(x...), v)
+
+metric(m::Function) = [mean(multibroadcast(3, m(i), Ref.(reference(t)), simulated(t))) for (i,t) ∈ enumerate(type)]
 
 function Base.filter(f, m::AbstractArray, dims::Integer)
     if dims > length(size(m))
@@ -68,26 +74,34 @@ function Base.filter(f, m::AbstractArray, dims::Integer)
     stack(filter(f, eachslice(m; dims=dims)); dims=dims)
 end
 
-filter_accessibility(predicate::Function) = (ref::Chain, val::Chain) -> filter(hcat(collect(ref), collect(val)), 1) do r
-    ref = r[1]
-    println(typeof(ref))
-    predicate(accessibility(ref))
+function Base.filter(f,v::Chain)
+    l = filter(f,residues(v))
+    Chain(v.id,collect(keys(l)),l,v.model)
 end
+accessibility(liste::AbstractVector{Int},val::Chain)  = filter(val) do (id,v)
+    v.number ∈ liste
+end
+accessibility(liste::AbstractVector{Int},val::Chain ...)  = accessibility.(Ref(liste),val)
 
-core(metric) = metric ∘ filter_accessibility(x -> x < 15)
-surface(metric) = metric ∘ filter_accessibility(x -> x > 0.3)
+accessibility(f::Function,liste::AbstractVector{Int},val::Chain ...) = f(accessibility(liste,val...)...)
+accessibility(f::Function) = partial(accessibility,f)
+accessibility(f::Function, liste::AbstractVector{Int}) = partial(accessibility,f,liste)
+accessibility(f::Function, liste::Vector{Vector{Int}}) = i -> accessibility(f,liste[i])
 
-metric(core(equality))
 
+metric(accessibility(equality, p.surflist))
+metric(accessibility(equality, p.corelist))
+
+accessibility(pack(equality), p.surflist)(1)(i[1])
 metric(similarity)
-
-x = only.(only.(reference.(type)))
+i = only(only(reference(type[4])))
+j = only.(only.(simulated(type[4])))
+accessibility.(equality,Ref(first(p.surflist)),Ref(i),j)
 count.(x -> x  < 15 ,multibroadcast(2,accessibility,x))
 
-density(accessibility.(x[7]))
 
-density(accessibility.(x))
+
 y = only(only(first(simulated(first(type)))))
 
 
-multibroadcast(4, equality ∘ filter_accessibility(x -> x < .15),Ref.(reference.(type)), simulated.(type)) .|> mean
+# score12, talaris2013 proteinMPNN, beta_nov16

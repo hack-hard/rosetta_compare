@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../../fullseqdesign_rosetta"
+		},
+		{
+			"path": ".."
+		}
+	],
+	"settings": {
+		"julia.environmentPath": "/home/hacquard/rosetta_compare"
+	}
+}
