@@ -65,7 +65,7 @@ p.hydrophcorelist
 p.surflist
 (v::AbstractVector{Function})(x...) = map(f -> f(x...), v)
 
-metric(m::Function) = [mean(multibroadcast(3, m(i), Ref.(reference(t)), simulated(t))) for (i,t) ∈ enumerate(type)]
+compute(m::Function) = [mean(multibroadcast(3, m(i), Ref.(reference(t)), simulated(t))) for (i,t) ∈ enumerate(type)]
 
 function Base.filter(f, m::AbstractArray, dims::Integer)
     if dims > length(size(m))
@@ -87,13 +87,13 @@ accessibility(f::Function,liste::AbstractVector{Int},val::Chain ...) = f(accessi
 accessibility(f::Function) = partial(accessibility,f)
 accessibility(f::Function, liste::AbstractVector{Int}) = partial(accessibility,f,liste)
 accessibility(f::Function, liste::Vector{Vector{Int}}) = i -> accessibility(f,liste[i])
+metric(f::Function) = [f,accessibility..(f, [p.corelist,p.surflist])...]
 
-
-metric(accessibility(equality, p.surflist))
-metric(accessibility(equality, p.corelist))
+compute(accessibility(equality, p.surflist))
+compute(accessibility(equality, p.corelist))
 
 accessibility(pack(equality), p.surflist)(1)(i[1])
-metric(similarity)
+compute(similarity)
 i = only(only(reference(type[4])))
 j = only.(only.(simulated(type[4])))
 accessibility.(equality,Ref(first(p.surflist)),Ref(i),j)
