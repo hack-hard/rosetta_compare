@@ -8,11 +8,11 @@ using BioSymbols
 using CSV
 using DataFrames
 
-path = "/home/hacquard/fullseqdesign_rosetta/allpositions/rosetta/"
-truePath = "/home/hacquard/fullseqdesign_rosetta/pdb.full/"
+path = "/home/hacquard/fullseqdesign_rosetta/allpositions/rosetta"
+truePath = "/home/hacquard/fullseqdesign_rosetta/pdb.full"
 protein = "/home/hacquard/rosetta_compare/data/protein.dat"
-type = ["1ABO", "1CSK", "1CKA", "1R6J", "1BM2"," 1G9O",  "2BYG", "1O4C", "1M61"]
-scores =  ["score12", "talaris2013", "beta_nov16"]
+type = ["1ABO", "1CSK", "1CKA", "1R6J", "1BM2", "1G9O", "2BYG", "1O4C", "1M61"]
+scores = ["score12", "talaris2013", "beta_nov16"]
 Base.keys(s::ProteinStructure) = keys(s.models)
 Base.keys(m::Model) = keys(m.chains)
 Base.keys(c::Chain) = keys(c.residues)
@@ -21,7 +21,7 @@ Base.keys(r::Residue) = keys(r.atoms)
 Base.convert(::Type{Chain}, m::Model) = only(m)
 Base.convert(::Type{Model}, m::ProteinStructure) = only(m)
 Base.convert(::Type{AminoAcid}, r::Residue) = parse(AminoAcid, r.name)
-Base.convert(::Type{Chain},m::ProteinStructure) = convert(Chain,convert(Model,m))
+Base.convert(::Type{Chain}, m::ProteinStructure) = convert(Chain, convert(Model, m))
 prop(x::AbstractVector{Bool}) = count(x) / length(x)
 
 equality(matrix::AbstractMatrix{Residue}) = equality(matrix[:, 1], matrix[:, 2])
@@ -41,23 +41,23 @@ struct Partial <: Function
     f::Function
     args::Tuple
 end
-(f::Partial)(y...) = f.f(f.args...,y...)
+(f::Partial)(y...) = f.f(f.args..., y...)
 
-partial(f,x...)= Partial(f,x)
+partial(f, x...) = Partial(f, x)
 pack(f::Function, x::Tuple) = f(x...)
-pack(f) = partial(pack,f)
+pack(f) = partial(pack, f)
 
 
 struct Mesure{T}
     mean::T
     std::T
 end
-Mesure(v::AbstractArray) = Mesure(mean(v),std(v))
+Mesure(v::AbstractArray) = Mesure(mean(v), std(v))
 
-function Base.show(io::IO,m::Mesure)
-    show(io,m.mean)
-    print(io," ± ")
-    show(io,m.std)
+function Base.show(io::IO, m::Mesure)
+    show(io, m.mean)
+    print(io, " ± ")
+    show(io, m.std)
 end
 
 unpack(x) =
@@ -76,13 +76,13 @@ multibroadcast(n::Integer, f, v...) =
 
 σ(x) = std(x) / mean(x)
 
-p = CSV.read(protein,DataFrame; delim=" ", ignorerepeated=true)
-apply(f,d::DataFrame) = DataFrame(multibroadcast(2,f , eachcol(d)), names(d))
-p = hcat(p[!,1:7],apply(l -> parse.(Int,split(l,",")),p[!,8:12]))
+p = CSV.read(protein, DataFrame; delim=" ", ignorerepeated=true)
+apply(f, d::DataFrame) = DataFrame(multibroadcast(2, f, eachcol(d)), names(d))
+p = hcat(p[!, 1:7], apply(l -> parse.(Int, split(l, ",")), p[!, 8:12]))
 
 (v::AbstractVector{Function})(x...) = map(f -> f(x...), v)
 
-compute(m::Function,score::String) = vcat([(multibroadcast(3, m(i), Ref.(reference(t)), simulated(t,score))) for (i,t) ∈ enumerate(type)]...)
+compute(m::Function, score::String) = vcat([(multibroadcast(3, m(i), Ref.(reference(t)), simulated(t, score))) for (i, t) ∈ enumerate(type)]...)
 
 function Base.filter(f, m::AbstractArray, dims::Integer)
     if dims > length(size(m))
@@ -91,33 +91,34 @@ function Base.filter(f, m::AbstractArray, dims::Integer)
     stack(filter(f, eachslice(m; dims=dims)); dims=dims)
 end
 
-function Base.filter(f,v::Chain)
-    l = filter(f,residues(v))
-    Chain(v.id,collect(keys(l)),l,v.model)
+function Base.filter(f, v::Chain)
+    l = filter(f, residues(v))
+    Chain(v.id, collect(keys(l)), l, v.model)
 end
-accessibility(liste::AbstractVector{Int},val::Chain)  = filter(val) do (id,v)
-    v.number ∈ liste
-end
-accessibility(liste::AbstractVector{Int},val::Chain ...)  = accessibility.(Ref(liste),val)
-accessibility(f::Function,liste::AbstractVector{Int},val::Chain ...) = f(accessibility(liste,val...)...)
-accessibility(f::Function, liste::AbstractVector{Int}) = partial(accessibility,f,liste)
-accessibility(f::Function, liste::Vector{Vector{Int}}, i::Integer) = accessibility(f,liste[i])
-accessibility(f::Function, liste::Vector{Vector{Int}}) =partial(accessibility,f,liste)
-unif(f,x) = f
-unif(f) = partial(unif,f)
-metric(f::Function) = [unif(f),accessibility.(f, [p.corelist,p.surflist])...]
-m = reshape(hcat(metric(equality),metric(similarity)),1,:)
-header = [:identity,:core_identity,:surface_identity,:similarity,:core_similarity,:surface_similarity]
+accessibility(liste::AbstractVector{Int}, val::Chain) =
+    filter(val) do (id, v)
+        v.number ∈ liste
+    end
+accessibility(liste::AbstractVector{Int}, val::Chain...) = accessibility.(Ref(liste), val)
+accessibility(f::Function, liste::AbstractVector{Int}, val::Chain...) = f(accessibility(liste, val...)...)
+accessibility(f::Function, liste::AbstractVector{Int}) = partial(accessibility, f, liste)
+accessibility(f::Function, liste::Vector{Vector{Int}}, i::Integer) = accessibility(f, liste[i])
+accessibility(f::Function, liste::Vector{Vector{Int}}) = partial(accessibility, f, liste)
+unif(f, x) = f
+unif(f) = partial(unif, f)
+metric(f::Function) = [unif(f), accessibility.(f, [p.corelist, p.surflist])...]
+m = reshape(hcat(metric(equality), metric(similarity)), 1, :)
+header = [:identity, :core_identity, :surface_identity, :similarity, :core_similarity, :surface_similarity]
 
 f(x...) = x
-res = compute(m[1,2],scores[1]) |> Mesure
-f.(m,scores)
+res = compute(m[1, 2], scores[1]) |> Mesure
+f.(m, scores)
 res = DataFrames()
 m[1]
 
-accessibility(f, p.corelist)(1)((j,j))
-j = convert(Chain,reference(type[4]))
+accessibility(f, p.corelist)(1)((j, j))
+j = convert(Chain, reference(type[4]))
 f(1)
-accessibility(p.corelist[4],j)
+accessibility(p.corelist[4], j)
 
 # score12, talaris2013 proteinMPNN, beta_nov16
