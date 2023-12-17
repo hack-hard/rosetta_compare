@@ -11,7 +11,7 @@ using DataFrames
 path = "/home/hacquard/fullseqdesign_rosetta/allpositions/rosetta"
 truePath = "/home/hacquard/fullseqdesign_rosetta/pdb.full"
 protein = "/home/hacquard/rosetta_compare/data/protein.dat"
-type = ["1ABO", "1CSK", "1CKA", "1R6J", "1BM2", "1G9O", "2BYG", "1O4C", "1M61"]
+type = ["1ABO", "1CSK", "1CKA", "1R6J", "1G9O", "2BYG","1BM2", "1O4C", "1M61"]
 scores = ["score12", "talaris2013", "beta_nov16"]
 Base.keys(s::ProteinStructure) = keys(s.models)
 Base.keys(m::Model) = keys(m.chains)
@@ -111,14 +111,12 @@ m = reshape(hcat(metric(equality), metric(similarity)), 1, :)
 header = [:identity, :core_identity, :surface_identity, :similarity, :core_similarity, :surface_similarity]
 
 f(x...) = x
-res = compute(m[1, 2], scores[1]) |> Mesure
-f.(m, scores)
-res = DataFrames()
-m[1]
+res = compute.(m, scores) .|> Mesure
+res = DataFrames(res,header)
 
 accessibility(f, p.corelist)(1)((j, j))
-j = convert(Chain, reference(type[4]))
+j = convert.(Chain, reference.(type))
 f(1)
-accessibility(p.corelist[4], j)
+accessibility.(p.corelist, j)
 
 # score12, talaris2013 proteinMPNN, beta_nov16
