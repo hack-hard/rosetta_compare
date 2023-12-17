@@ -11,7 +11,7 @@ using DataFrames
 path = "/home/hacquard/fullseqdesign_rosetta/allpositions/rosetta/"
 truePath = "/home/hacquard/fullseqdesign_rosetta/pdb.full/"
 protein = "/home/hacquard/rosetta_compare/data/protein.dat"
-type = ["1ABO", "1CSK", "1BM2", "1CKA", "1G9O", "1M61", "1O4C", "1R6J", "2BYG"]
+type = ["1ABO", "1CSK", "1CKA", "1R6J", "1BM2"," 1G9O",  "2BYG", "1O4C", "1M61"]
 scores =  ["score12", "talaris2013", "beta_nov16"]
 Base.keys(s::ProteinStructure) = keys(s.models)
 Base.keys(m::Model) = keys(m.chains)
@@ -23,7 +23,6 @@ Base.convert(::Type{Model}, m::ProteinStructure) = only(m)
 Base.convert(::Type{AminoAcid}, r::Residue) = parse(AminoAcid, r.name)
 Base.convert(::Type{Chain},m::ProteinStructure) = convert(Chain,convert(Model,m))
 prop(x::AbstractVector{Bool}) = count(x) / length(x)
-
 
 equality(matrix::AbstractMatrix{Residue}) = equality(matrix[:, 1], matrix[:, 2])
 equality(x::Union{Chain,AbstractVector{Residue}}, y::Union{Chain,AbstractVector{Residue}}) = prop(equality.(x, y))
@@ -100,21 +99,25 @@ accessibility(liste::AbstractVector{Int},val::Chain)  = filter(val) do (id,v)
     v.number ∈ liste
 end
 accessibility(liste::AbstractVector{Int},val::Chain ...)  = accessibility.(Ref(liste),val)
-
 accessibility(f::Function,liste::AbstractVector{Int},val::Chain ...) = f(accessibility(liste,val...)...)
 accessibility(f::Function, liste::AbstractVector{Int}) = partial(accessibility,f,liste)
-accessibility(f::Function, liste::Vector{Vector{Int}}) = i -> accessibility(f,liste[i])
+accessibility(f::Function, liste::Vector{Vector{Int}}, i::Integer) = accessibility(f,liste[i])
+accessibility(f::Function, liste::Vector{Vector{Int}}) =partial(accessibility,f,liste)
+unif(f,x) = f
+unif(f) = partial(unif,f)
 metric(f::Function) = [unif(f),accessibility.(f, [p.corelist,p.surflist])...]
 m = reshape(hcat(metric(equality),metric(similarity)),1,:)
 header = [:identity,:core_identity,:surface_identity,:similarity,:core_similarity,:surface_similarity]
-unif(f,x) = f
-unif(f) = partial(unif,f)
+
 f(x...) = x
 res = compute(m[1,2],scores[1]) |> Mesure
 f.(m,scores)
 res = DataFrames()
-typeof(m[2](1))<:Partial
-accessibility(f, p.corelist)(1)(j)
-j = convert(Chain,reference(type[1]))
+m[1]
+
+accessibility(f, p.corelist)(1)((j,j))
+j = convert(Chain,reference(type[4]))
+f(1)
+accessibility(p.corelist[4],j)
 
 # score12, talaris2013 proteinMPNN, beta_nov16
