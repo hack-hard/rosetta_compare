@@ -35,10 +35,16 @@ similarity(x::Union{Chain,AbstractVector{Residue}}, y::Union{Chain,AbstractVecto
 
 
 
-simulated(type::String, score::String)::Vector{ProteinStructure} = (read.("$path/$score/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir(path)), [PDB]))
+simulated(type::String, score::String)::Vector{ProteinStructure} = (read.("$path/$score/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir("$path/$score/")), [PDB]))
 reference(type::String)::ProteinStructure = read("$truePath/$type.pdb", PDB)
 
-partial(f,x...)= (y...) -> f(x...,y...)
+struct Partial <: Function
+    f::Function
+    args::Tuple
+end
+(f::Partial)(y...) = f.f(f.args...,y...)
+
+partial(f,x...)= Partial(f,x)
 pack(f::Function, x::Tuple) = f(x...)
 pack(f) = partial(pack,f)
 
@@ -49,7 +55,11 @@ struct Mesure{T}
 end
 Mesure(v::AbstractArray) = Mesure(mean(v),std(v))
 
-Base.show(io::IO,m::Mesure) = show.(io,[m.mean," ± ",m.std])
+function Base.show(io::IO,m::Mesure)
+    show(io,m.mean)
+    print(io," ± ")
+    show(io,m.std)
+end
 
 unpack(x) =
     if length(x) == 1
@@ -70,11 +80,10 @@ multibroadcast(n::Integer, f, v...) =
 p = CSV.read(protein,DataFrame; delim=" ", ignorerepeated=true)
 apply(f,d::DataFrame) = DataFrame(multibroadcast(2,f , eachcol(d)), names(d))
 p = hcat(p[!,1:7],apply(l -> parse.(Int,split(l,",")),p[!,8:12]))
-p.hydrophcorelist
-p.surflist
+
 (v::AbstractVector{Function})(x...) = map(f -> f(x...), v)
 
-compute(m::Function,score::String) = hcat([(multibroadcast(3, m(i), Ref.(reference(t)), simulated(t,score))) for (i,t) ∈ enumerate(type)])
+compute(m::Function,score::String) = vcat([(multibroadcast(3, m(i), Ref.(reference(t)), simulated(t,score))) for (i,t) ∈ enumerate(type)]...)
 
 function Base.filter(f, m::AbstractArray, dims::Integer)
     if dims > length(size(m))
@@ -93,18 +102,19 @@ end
 accessibility(liste::AbstractVector{Int},val::Chain ...)  = accessibility.(Ref(liste),val)
 
 accessibility(f::Function,liste::AbstractVector{Int},val::Chain ...) = f(accessibility(liste,val...)...)
-accessibility(f::Function) = partial(accessibility,f)
 accessibility(f::Function, liste::AbstractVector{Int}) = partial(accessibility,f,liste)
 accessibility(f::Function, liste::Vector{Vector{Int}}) = i -> accessibility(f,liste[i])
 metric(f::Function) = [unif(f),accessibility.(f, [p.corelist,p.surflist])...]
 m = reshape(hcat(metric(equality),metric(similarity)),1,:)
-partial(f::Function,x...) = y ->f(x...,y...)
-
+header = [:identity,:core_identity,:surface_identity,:similarity,:core_similarity,:surface_similarity]
 unif(f,x) = f
 unif(f) = partial(unif,f)
-
-res = compute(m[1,1],scores[1])
-
-
+f(x...) = x
+res = compute(m[1,2],scores[1]) |> Mesure
+f.(m,scores)
+res = DataFrames()
+typeof(m[2](1))<:Partial
+accessibility(f, p.corelist)(1)(j)
+j = convert(Chain,reference(type[1]))
 
 # score12, talaris2013 proteinMPNN, beta_nov16
