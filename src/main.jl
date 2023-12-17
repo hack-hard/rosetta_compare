@@ -35,12 +35,21 @@ similarity(x::Union{Chain,AbstractVector{Residue}}, y::Union{Chain,AbstractVecto
 
 
 
-simulated(type::String)::Vector{ProteinStructure} = (read.(path * "/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir(path)), [PDB]))[1:40]
+simulated(type::String, score::String)::Vector{ProteinStructure} = (read.("$path/score/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir(path)), [PDB]))[1:40]
 reference(type::String)::ProteinStructure = read("$truePath/$type.pdb", PDB)
 
 partial(f,x...)= (y...) -> f(x...,y...)
 pack(f::Function, x::Tuple) = f(x...)
 pack(f) = partial(pack,f)
+
+
+struct Mesure{T}
+    mean::T
+    std::T
+end
+Mesure(v::AbstractArray) = Mesure(mean(v),std(v))
+
+Base.show(io::IO,m::Mesure) = show.(io,[m.mean," ± ",m.std])
 
 unpack(x) =
     if length(x) == 1
@@ -65,7 +74,7 @@ p.hydrophcorelist
 p.surflist
 (v::AbstractVector{Function})(x...) = map(f -> f(x...), v)
 
-compute(m::Function) = [mean(multibroadcast(3, m(i), Ref.(reference(t)), simulated(t))) for (i,t) ∈ enumerate(type)]
+compute(m::Function,score::String) = hcat((multibroadcast(3, m(i), Ref.(reference(t)), simulated(t,score))) for (i,t) ∈ enumerate(type))
 
 function Base.filter(f, m::AbstractArray, dims::Integer)
     if dims > length(size(m))
@@ -88,8 +97,13 @@ accessibility(f::Function) = partial(accessibility,f)
 accessibility(f::Function, liste::AbstractVector{Int}) = partial(accessibility,f,liste)
 accessibility(f::Function, liste::Vector{Vector{Int}}) = i -> accessibility(f,liste[i])
 metric(f::Function) = [f,accessibility..(f, [p.corelist,p.surflist])...]
+m = reshape(hcat(metric(equality),metric(similarity)),1,:)
+partial(f::Function,x...) = y ->f(x...,y...)
 
-compute(accessibility(equality, p.surflist))
+unif(f,x) = f
+unif(f) = partial(unif,f)
+
+res = compute(m,score) .|> Mesure
 compute(accessibility(equality, p.corelist))
 
 accessibility(pack(equality), p.surflist)(1)(i[1])
