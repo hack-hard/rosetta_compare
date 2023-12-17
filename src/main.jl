@@ -12,7 +12,7 @@ path = "/home/hacquard/fullseqdesign_rosetta/allpositions/rosetta/"
 truePath = "/home/hacquard/fullseqdesign_rosetta/pdb.full/"
 protein = "/home/hacquard/rosetta_compare/data/protein.dat"
 type = ["1ABO", "1CSK", "1BM2", "1CKA", "1G9O", "1M61", "1O4C", "1R6J", "2BYG"]
-
+scores =  ["score12", "talaris2013", "beta_nov16"]
 Base.keys(s::ProteinStructure) = keys(s.models)
 Base.keys(m::Model) = keys(m.chains)
 Base.keys(c::Chain) = keys(c.residues)
@@ -35,7 +35,7 @@ similarity(x::Union{Chain,AbstractVector{Residue}}, y::Union{Chain,AbstractVecto
 
 
 
-simulated(type::String, score::String)::Vector{ProteinStructure} = (read.("$path/score/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir(path)), [PDB]))[1:40]
+simulated(type::String, score::String)::Vector{ProteinStructure} = (read.("$path/$score/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir(path)), [PDB]))
 reference(type::String)::ProteinStructure = read("$truePath/$type.pdb", PDB)
 
 partial(f,x...)= (y...) -> f(x...,y...)
@@ -74,7 +74,7 @@ p.hydrophcorelist
 p.surflist
 (v::AbstractVector{Function})(x...) = map(f -> f(x...), v)
 
-compute(m::Function,score::String) = hcat((multibroadcast(3, m(i), Ref.(reference(t)), simulated(t,score))) for (i,t) ∈ enumerate(type))
+compute(m::Function,score::String) = hcat([(multibroadcast(3, m(i), Ref.(reference(t)), simulated(t,score))) for (i,t) ∈ enumerate(type)])
 
 function Base.filter(f, m::AbstractArray, dims::Integer)
     if dims > length(size(m))
@@ -96,14 +96,14 @@ accessibility(f::Function,liste::AbstractVector{Int},val::Chain ...) = f(accessi
 accessibility(f::Function) = partial(accessibility,f)
 accessibility(f::Function, liste::AbstractVector{Int}) = partial(accessibility,f,liste)
 accessibility(f::Function, liste::Vector{Vector{Int}}) = i -> accessibility(f,liste[i])
-metric(f::Function) = [f,accessibility.(f, [p.corelist,p.surflist])...]
+metric(f::Function) = [unif(f),accessibility.(f, [p.corelist,p.surflist])...]
 m = reshape(hcat(metric(equality),metric(similarity)),1,:)
 partial(f::Function,x...) = y ->f(x...,y...)
 
 unif(f,x) = f
 unif(f) = partial(unif,f)
 
-res = compute.(m,score) .|> Mesure
+res = compute(m[1,1],scores[1])
 
 
 
