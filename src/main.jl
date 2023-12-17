@@ -11,7 +11,7 @@ using DataFrames
 path = "/home/hacquard/fullseqdesign_rosetta/allpositions/rosetta/"
 truePath = "/home/hacquard/fullseqdesign_rosetta/pdb.full/"
 protein = "/home/hacquard/rosetta_compare/data/protein.dat"
-type = ["1ABO" "1CSK" "1BM2" "1CKA" "1G9O" "1M61" "1O4C" "1R6J" "2BYG"]
+type = ["1ABO", "1CSK", "1BM2", "1CKA", "1G9O", "1M61", "1O4C", "1R6J", "2BYG"]
 
 Base.keys(s::ProteinStructure) = keys(s.models)
 Base.keys(m::Model) = keys(m.chains)
@@ -96,26 +96,15 @@ accessibility(f::Function,liste::AbstractVector{Int},val::Chain ...) = f(accessi
 accessibility(f::Function) = partial(accessibility,f)
 accessibility(f::Function, liste::AbstractVector{Int}) = partial(accessibility,f,liste)
 accessibility(f::Function, liste::Vector{Vector{Int}}) = i -> accessibility(f,liste[i])
-metric(f::Function) = [f,accessibility..(f, [p.corelist,p.surflist])...]
+metric(f::Function) = [f,accessibility.(f, [p.corelist,p.surflist])...]
 m = reshape(hcat(metric(equality),metric(similarity)),1,:)
 partial(f::Function,x...) = y ->f(x...,y...)
 
 unif(f,x) = f
 unif(f) = partial(unif,f)
 
-res = compute(m,score) .|> Mesure
-compute(accessibility(equality, p.corelist))
+res = compute.(m,score) .|> Mesure
 
-accessibility(pack(equality), p.surflist)(1)(i[1])
-compute(similarity)
-i = only(only(reference(type[4])))
-j = only.(only.(simulated(type[4])))
-accessibility.(equality,Ref(first(p.surflist)),Ref(i),j)
-count.(x -> x  < 15 ,multibroadcast(2,accessibility,x))
-
-
-
-y = only(only(first(simulated(first(type)))))
 
 
 # score12, talaris2013 proteinMPNN, beta_nov16
