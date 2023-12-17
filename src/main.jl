@@ -11,7 +11,7 @@ using DataFrames
 path = "/home/hacquard/fullseqdesign_rosetta/allpositions/rosetta/"
 truePath = "/home/hacquard/fullseqdesign_rosetta/pdb.full/"
 protein = "/home/hacquard/rosetta_compare/data/protein.dat"
-type = ["1ABO", "1BM2", "1CKA", "1G9O", "1M61", "1O4C", "1R6J", "2BYG"]
+type = ["1ABO" "1CSK" "1BM2" "1CKA" "1G9O" "1M61" "1O4C" "1R6J" "2BYG"]
 
 Base.keys(s::ProteinStructure) = keys(s.models)
 Base.keys(m::Model) = keys(m.chains)
