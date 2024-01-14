@@ -7,7 +7,8 @@ using BioAlignments
 using BioSymbols
 using CSV
 using DataFrames
-
+using Printf
+using BioSequences
 path = "/home/hacquard/fullseqdesign_rosetta/allpositions/rosetta"
 truePath = "/home/hacquard/fullseqdesign_rosetta/pdb.full"
 protein = "/home/hacquard/rosetta_compare/data/protein.dat"
@@ -112,11 +113,25 @@ header = [:identity, :core_identity, :surface_identity, :similarity, :core_simil
 
 f(x...) = x
 res = compute.(m, scores) .|> Mesure
-res = DataFrames(res,header)
-
+res = DataFrame(res,header)
+res = hcat(DataFrame([scores],[:scores]),res)
+CSV.write("temp.csv", res; transform=transform)
 accessibility(f, p.corelist)(1)((j, j))
 j = convert.(Chain, reference.(type))
-f(1)
+transform(col,val) = val
+transform(col,val::Float64) = @sprintf("%.2f", val)
+transform(col,val::Mesure) = transform(col,val.mean)*" ± "* transform(col,val.std)
 accessibility.(p.corelist, j)
 
 # score12, talaris2013 proteinMPNN, beta_nov16
+
+function dna(s::Chain)
+function read_fa(io::IO)
+    res = []
+    while !eof(io)
+        readline(io)
+        append(res,parse(LongDNA,readline(io)))
+    end
+    res
+end
+        
