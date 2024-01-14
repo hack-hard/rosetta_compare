@@ -119,7 +119,6 @@ CSV.write("temp.csv", res; transform=transform)
 accessibility(f, p.corelist)(1)((j, j))
 j = convert.(Chain, reference.(type))
 transform(col,val) = val
-transform(col,val::Float64) = @sprintf("%.2f", val)
 transform(col,val::Mesure) = transform(col,val.mean)*" ± "* transform(col,val.std)
 accessibility.(p.corelist, j)
 
