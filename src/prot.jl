@@ -1,15 +1,22 @@
+path = "/home/hacquard/fullseqdesign_rosetta/allpositions"
+rosetta_path = "$path/rosetta"
+proteinMPNN_path = "$path/proteinMPNN"
+reference_path = "/home/hacquard/fullseqdesign_rosetta/pdb.full"
+protein = "/home/hacquard/rosetta_compare/data/protein.dat"
+type = ["1ABO", "1CSK", "1CKA", "1R6J", "1G9O", "2BYG", "1BM2", "1O4C", "1M61"]
+scores = ["score12", "talaris2013", "beta_nov16"]
+
+
 prop(x::AbstractVector{Bool}) = count(x) / length(x)
 
-equality(matrix::AbstractMatrix{Residue}) = equality(matrix[:, 1], matrix[:, 2])
-equality(x::Union{Chain,AbstractVector{Residue}}, y::Union{Chain,AbstractVector{Residue}}) = prop(equality.(x, y))
-equality(x::Residue, y::Residue) = resname(x) == resname(y)
+equality(x::AbstractVector{AminoAcid}, y::AbstractVector{AminoAcid}) = prop(equality.(x, y))
+equality(x::AminoAcid, y::AminoAcid) = x == y
 
-similarity(matrix::AbstractMatrix{Residue}) = similarity(matrix[1, :], matrix[2, :])
-similarity(x::Residue, y::Residue) = BLOSUM62[x, y]
-similarity(x::Union{Chain,AbstractVector{Residue}}, y::Union{Chain,AbstractVector{Residue}}) = mean(similarity.(x, y))
+similarity(x::AminoAcid, y::AminoAcid) = BLOSUM62[x, y]
+similarity(x::AbstractVector{AminoAcid}, y::AbstractVector{AminoAcid}) = mean(similarity.(x, y))
 
 
-simulated(type::String,model::Val{:rosetta}, score::String)::Vector{Vector{AminoAcid}} = read.("$path/$score/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir("$rosetta_path/$score/")), [PDB]) .|> dna
+simulated(type::String,model::Val{:rosetta}, score::String)::Vector{Vector{AminoAcid}} = read.("$rosetta_path/$score/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir("$rosetta_path/$score/")), [PDB]) .|> dna
 simulated(type::String,model::Val{:proteinMPNN}) = read("$proteinMPNN_path/seqs/$type.fa" , Vector{Vector{AminoAcid}})
 reference(type::String)::ProteinStructure = read("$reference_path/$type.pdb", PDB)
 
@@ -62,7 +69,7 @@ Base.convert(::Type{Chain}, m::Model) = only(m)
 Base.convert(::Type{Model}, m::ProteinStructure) = only(m)
 Base.convert(::Type{AminoAcid}, r::Residue) = parse(AminoAcid, r.name)
 Base.convert(::Type{Chain}, m::ProteinStructure) = convert(Chain, convert(Model, m))
-
+Base.parse(x::Type) = partial(parse,x)
 
 function Base.filter(f, m::AbstractArray, dims::Integer)
     if dims > length(size(m))
@@ -78,13 +85,22 @@ end
 
 
 accessibility(liste::AbstractVector{Int}, val::AbstractVector) = val[liste]
-accessibility(f::Function, liste::AbstractVector{Int}, val::AbstractVector) = f(accessibility(liste, val...)...)
+accessibility(f::Function, liste::AbstractVector{Int}, val::AbstractVector...) = f(accessibility.(Ref(liste), val)...)
 accessibility(f::Function, liste::AbstractVector{Int}) = partial(accessibility, f, liste)
 accessibility(f::Function, liste::Vector{Vector{Int}}, i::Integer) = accessibility(f, liste[i])
 accessibility(f::Function, liste::Vector{Vector{Int}}) = partial(accessibility, f, liste)
-unif(f, x) = f
 
-compute(m::Function, score::String) = vcat([(multibroadcast(3, m(i), Ref.(reference(t)), simulated(t, score))) for (i, t) ∈ enumerate(type)]...)
+sequence(s::ProteinStructure) = s |> only |> only |> sequence
+sequence(s::Chain) = OffsetVector(s |> collect .|> convert(AminoAcid),first_pos(s)-1)
+
+first_pos(s::Chain) =  s |> keys .|> parse(Int) |> minimum
+
+
+unif(f, _) = f
+
+compute(m::Function, generators...) = mapreduce(vcat,enumerate(type)) do (i,t)
+    m(i).(reference(t) |> sequence |> Ref, simulated(t, generators...) .|> sequence)
+end
 
 
 unif(f) = partial(unif, f)
@@ -92,3 +108,12 @@ metric(f::Function) = [unif(f), accessibility.(f, [p.corelist, p.surflist])...]
 
 apply(f, d::DataFrame) = DataFrame(multibroadcast(2, f, eachcol(d)), names(d))
 (v::AbstractVector{Function})(x...) = map(f -> f(x...), v)
+
+function Base.read(io::IO, ::Type{Vector{Vector{AminoAcid}}})
+    res = Vector{AminoAcid}[]
+    while !eof(io)
+        readline(io)
+        push!(res, parse.(AminoAcid, collect(readline(io))))
+    end
+    res
+end
