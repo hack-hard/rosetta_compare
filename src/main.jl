@@ -35,6 +35,3 @@ accessibility.(p.corelist, j)
 
 # score12, talaris2013 proteinMPNN, beta_nov16
 
-equality.(type |> first |> reference |> sequence |> parent |> Ref, simulated(first(type), Val(:proteinMPNN))[2:end])
-
-
