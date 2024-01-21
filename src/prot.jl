@@ -7,18 +7,42 @@ type = ["1ABO", "1CSK", "1CKA", "1R6J", "1G9O", "2BYG", "1BM2", "1O4C", "1M61"]
 scores = ["score12", "talaris2013", "beta_nov16"]
 
 
+
+unpack(x) =
+    if length(x) == 1
+        only(x)
+    else
+        x
+    end
+
+multibroadcast(n::Integer, f, v...) =
+    if n == 0
+        f(v...)
+    else
+        unpack(multibroadcast.(n - 1, f, v...))
+    end
+
+apply(f, d::DataFrame) = DataFrame(multibroadcast(2, f, eachcol(d)), names(d))
+
+p = CSV.read(protein, DataFrame; delim=" ", ignorerepeated=true)
+p = hcat(p[!, 1:7], apply(l -> parse.(Int, split(l, ",")), p[!, 8:12]))
+
+
+align(x::AbstractArray) = x
+align(x::OffsetArray) = parent(x)
+
 prop(x::AbstractVector{Bool}) = count(x) / length(x)
 
-equality(x::AbstractVector{AminoAcid}, y::AbstractVector{AminoAcid}) = prop(equality.(x, y))
+equality(x::AbstractVector{AminoAcid}, y::AbstractVector{AminoAcid}) = prop(equality.(align(x), align(y)))
 equality(x::AminoAcid, y::AminoAcid) = x == y
 
 similarity(x::AminoAcid, y::AminoAcid) = BLOSUM62[x, y]
-similarity(x::AbstractVector{AminoAcid}, y::AbstractVector{AminoAcid}) = mean(similarity.(x, y))
+similarity(x::AbstractVector{AminoAcid}, y::AbstractVector{AminoAcid}) = mean(similarity.(align(x), align(y)))
 
 
-simulated(type::String,model::Val{:rosetta}, score::String)::Vector{Vector{AminoAcid}} = read.("$rosetta_path/$score/" .* filter(x -> (!isnothing ∘ match)(type * r".*rosetta.*pdb", x), readdir("$rosetta_path/$score/")), [PDB]) .|> dna
-simulated(type::String,model::Val{:proteinMPNN}) = read("$proteinMPNN_path/seqs/$type.fa" , Vector{Vector{AminoAcid}})
-reference(type::String)::ProteinStructure = read("$reference_path/$type.pdb", PDB)
+simulated(id_type::Int,model::Val{:rosetta}, score::String) = read.("$rosetta_path/$score/" .* filter(x -> (!isnothing ∘ match)(type[id_type] * r".*rosetta.*pdb", x), readdir("$rosetta_path/$score/")), Ref(PDB)) .|> sequence
+simulated(id_type::Int,model::Val{:proteinMPNN}) = OffsetVector.(read("$proteinMPNN_path/seqs/$(type[id_type]).fa" , Vector{Vector{AminoAcid}}), p.firstdesignedpos[id_type] -1)
+reference(id_type::Int) = read("$reference_path/$(type[id_type]).pdb", PDB) |> sequence
 
 struct Partial <: Function
     f::Function
@@ -43,19 +67,6 @@ function Base.show(io::IO, m::Mesure)
     show(io, m.std)
 end
 
-unpack(x) =
-    if length(x) == 1
-        only(x)
-    else
-        x
-    end
-
-multibroadcast(n::Integer, f, v...) =
-    if n == 0
-        f(v...)
-    else
-        unpack(multibroadcast.(n - 1, f, v...))
-    end
 
 σ(x) = std(x) / mean(x)
 
@@ -98,19 +109,21 @@ first_pos(s::Chain) =  s |> keys .|> parse(Int) |> minimum
 
 unif(f, _) = f
 
-compute(m::Function, generators...) = mapreduce(vcat,enumerate(type)) do (i,t)
-    m(i).(reference(t) |> sequence |> Ref, simulated(t, generators...) .|> sequence)
+compute(m::Function, generators) = mapreduce(vcat,eachindex(type)) do i
+    m(i).(reference(i) |> Ref, simulated(i, generators...))
 end
 
 
 unif(f) = partial(unif, f)
 metric(f::Function) = [unif(f), accessibility.(f, [p.corelist, p.surflist])...]
 
-apply(f, d::DataFrame) = DataFrame(multibroadcast(2, f, eachcol(d)), names(d))
+
 (v::AbstractVector{Function})(x...) = map(f -> f(x...), v)
 
 function Base.read(io::IO, ::Type{Vector{Vector{AminoAcid}}})
     res = Vector{AminoAcid}[]
+    readline(io)
+    readline(io)
     while !eof(io)
         readline(io)
         push!(res, parse.(AminoAcid, collect(readline(io))))

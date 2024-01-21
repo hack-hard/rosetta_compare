@@ -14,23 +14,23 @@ include("prot.jl")
 
 
 
-p = CSV.read(protein, DataFrame; delim=" ", ignorerepeated=true)
-p = hcat(p[!, 1:7], apply(l -> parse.(Int, split(l, ",")), p[!, 8:12]))
 
 
-reference(first(type)) |> sequence
-
+reference(first(type))
 m = reshape(hcat(metric(equality), metric(similarity)), 1, :)
 header = [:identity, :core_identity, :surface_identity, :similarity, :core_similarity, :surface_similarity]
+simulated(1, Val(:proteinMPNN)) 
+args = vcat(tuple.(Val(:rosetta),scores),(Val(:proteinMPNN),))
 
-res = compute.(m, Val(:rosetta),scores[1]) .|> Mesure
+
+res = compute.(m, args) .|> Mesure
 res = DataFrame(res, header)
-res = hcat(DataFrame([scores], [:scores]), res)
-CSV.write("temp.csv", res; transform=transform)
-accessibility(f, p.corelist)(1)((j, j))
-j = convert.(Chain, reference.(type))
-transform(col, val) = val
-transform(col, val::Mesure) = transform(col, val.mean) * " ± " * transform(col, val.std)
+column(values,header)= DataFrame([values],[header])
+res = hcat(column(vcat(scores ,"proteinMPNN"), :scores), res)
+CSV.write("temp.csv", res; transform=f)
+
+f(col, val) = val
+f(col, val::Mesure) = repr(val; context = :compact => true)
 accessibility.(p.corelist, j)
 
 # score12, talaris2013 proteinMPNN, beta_nov16
