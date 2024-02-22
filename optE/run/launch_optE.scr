@@ -1,0 +1,4 @@
+#!/bin/sh
+rosetta=/home/gaillard/prog/rosetta/rosetta_bin_linux_2017.08.59291_bundle
+optE=main/source/build/src/release/linux/3.10/64/x86/gcc/4.8/static/optE_parallel.static.linuxgccrelease
+nohup $rosetta/$optE `awk /^-/ optE_seqprof.flags` > ~/optE_log &
